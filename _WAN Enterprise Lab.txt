@@ -1,510 +1,732 @@
-RST MultiSite
---
+MPLS
 
-S2S VPN + PKI Server
+### OSPF
 
-!@All Devices
-conf t  
- enable secret pass
- no logging cons
- no ip domain lookup
- no ip http server
- no ip http secure-server
- line vty 0 4
-  password pass
-  login
-  exec-timeout 0 0
-  end
+Configure OSPF
+- Advertise connected routes that are part of the MPLS Cloud
+- Links between Cores & RouteReflector are in area 0
+- Links between Cores to PERouter are in their respective area
+  PE1 = 1
+  PE2 = 2
+  PE3 = 3
+  PE4 = 4
+- Advertise RouteReflector Loopback 1 IP only
 
-
-### Apply IP addressing  
-
-!@HQ
+~~~
+!@C1
 conf t
- hostname HQ
- int lo0
-  ip add 10.10.10.10 255.255.255.255
- int lo1
-  ip add 10.0.10.10 255.255.255.0
- int e0/0
-  ip add 11.0.0.10  255.255.255.0
-  no shut
-  end
-
-!@E1
-conf t
- hostname E1
- int lo0
+ int lo10
   ip add 1.1.1.1 255.255.255.255
- int e0/0
-  ip add 11.0.1.1 255.255.255.0
-  no shut
- int e0/1
-  ip add 10.0.1.1 255.255.255.0
-  no shut
+ router ospf 1
+  router-id 1.1.1.1
+   network 1.1.1.1 0.0.0.0 area 0
+   network 10.8.1.0 0.0.0.255 area 0
+   network 10.8.12.0 0.0.0.255 area 0
+   !
+   network 10.8.0.0 0.0.0.127 area 1
+   network 10.8.0.128 0.0.0.127 area 2
   end
+~~~
 
-!@E2
+<br>
+
+~~~
+!@C2
 conf t
- hostname E2
- int lo0
+ int lo10
   ip add 2.2.2.2 255.255.255.255
- int e0/0
-  ip add 12.0.2.2 255.255.255.0
-  no shut
- int e0/1
-  ip add 10.0.2.2 255.255.255.0
-  no shut
+ router ospf 1
+  router-id 2.2.2.2
+   network 2.2.2.2 0.0.0.0 area 0
+   network 10.8.2.0 0.0.0.255 area 0
+   network 10.8.12.0 0.0.0.255 area 0
+   !
+   network 10.8.3.0 0.0.0.255 area 3
+   network 10.8.4.0 0.0.0.255 area 4
   end
+~~~
 
-!@E3
+<br>
+
+~~~
+!@RR
 conf t
- hostname E3
+ router ospf 1
+   network 10.8.1.0 0.0.0.255 area 0
+   network 10.8.2.0 0.0.0.255 area 0
+   network 10.8.101.8 0.0.0.255 area 0
+  exit
+  end
+~~~
+
+<br>
+
+If you do not specify a router-id, what will RR's router-id be?
+~~~
+!@RR
+show ip ospf database
+~~~
+
+<br>
+
+
+- On the PERouters, make sure to advertise OSPF without using the network statement.
+~~~
+!@PE-1
+conf t
+ router ospf 1
+  router-id 172.16.8.1
+  exit
  int lo0
-  ip add 3.3.3.3 255.255.255.255
+  ip ospf 1 area 1
  int e0/0
-  ip add 13.0.3.3 255.255.255.0
-  no shut
- int e0/1
-  ip add 10.0.3.3 255.255.255.0
-  no shut
+  ip ospf 1 area 1
   end
+~~~
 
-!@P1
-conf t
- hostname P1
- int e0/0
-  ip add 10.0.1.101 255.255.255.0
-  no shut
- ip route 0.0.0.0 0.0.0.0 10.0.1.1
-  end
+<br>
 
-!@P2
+~~~
+!@PE-2
 conf t
- hostname P2
- int e0/0
-  ip add 10.0.2.102 255.255.255.0
-  no shut
- ip route 0.0.0.0 0.0.0.0 10.0.2.2
-  end
-  
-!@P3
-conf t
- hostname P3
- int e0/0
-  ip add 10.0.3.103 255.255.255.0
-  no shut
- ip route 0.0.0.0 0.0.0.0 10.0.3.3
-  end
-
-!@I1
-conf t
- hostname I1
+ router ospf 1
+  router-id 172.16.8.2
+  exit
  int lo0
-  ip add 8.8.8.8 255.255.255.255
+  ip ospf 1 area 2
  int e0/0
-  ip add 11.0.0.11 255.255.255.0
-  no shut
+  ip ospf 1 area 2
+  end
+~~~
+
+<br>
+
+~~~
+!@PE-3
+conf t
+ router ospf 1
+  router-id 172.16.8.3
+  exit
+ int lo0
+  ip ospf 1 area 3
+ int e0/0
+  ip ospf 1 area 3
+  end
+~~~
+
+<br>
+
+~~~
+!@PE-4
+conf t
+ router ospf 1
+  router-id 172.16.8.4
+  exit
+ int lo0
+  ip ospf 1 area 4
+ int e0/0
+  ip ospf 1 area 4
+  end
+~~~
+
+<br>
+
+Reduce unnecessary network traffic.
+- Make sure no ospf hello packets gets sent to the loopback interface
+- Increase the hello interval to 40s & dead interval to 120s
+
+~~~
+!@C1,C2
+conf t
+ router ospf 1
+  passive-interface lo10
+  exit
+ int range e0/0-3
+  ip ospf hello-interval 40
+  ip ospf dead-interval 120
+  end
+~~~
+
+<br>
+
+~~~
+!@RR
+conf t
+ router ospf 1
+  passive-interface lo1
+  passive-interface lo2
+  passive-interface lo3
+  passive-interface lo4
+  exit
+ int range e0/1-2
+  ip ospf hello-interval 40
+  ip ospf dead-interval 120
+  end
+~~~
+
+<br>
+
+~~~
+!@PE-1,PE-2,PE-3,PE-4
+conf t
+ router ospf 1
+  passive-interface lo0
+  exit
+ int e0/0
+  ip ospf hello-interval 40
+  ip ospf dead-interval 120
+  end
+~~~
+
+<br>
+<br>
+
+---
+&nbsp;
+
+- Configure C1 & C2 with the highest priority so that they are the DR on all non-backbone area.
+~~~
+!@C1,C2
+conf t
+ int range e0/1-2
+  ip ospf priority 255
+  end
+~~~
+
+<br>
+
+Make sure C1 is the DR on all links, while C2 is the DR between C2 & RR.
+~~~
+!@C1
+conf t
+ int range e0/0,e0/3
+  ip ospf priority 255
+  end
+~~~
+
+<br>
+
+~~~
+!@C2
+conf t
+ int e0/0
+  ip ospf priority 255
+  end
+~~~
+
+<br>
+
+~~~
+!@PE-1,PE-2,PE-3,PE-4,RR
+clear ip ospf process
+yes
+!
+~~~
+
+<br>
+<br>
+
+---
+&nbsp;
+
+Configure Key-chain authentication on the links between areas connecting to area 0
+- Make sure to use HMAC-SHA-256 algorithm
+
+~~~
+!@All MPLS Devices
+conf t
+ key chain MPLS-KEYS
+  key 1
+   key-string C1sc0123
+   cryptographic-algorithm hmac-sha-256
+   end
+~~~
+
+<br>
+
+~~~
+!@C1,C2
+conf t
+ int range e0/1-2
+  ip ospf authentication key-chain MPLS-KEYS
+  end
+~~~
+
+<br>
+
+~~~
+!@PE-1,PE-2,PE-3,PE-4
+conf t
+ int e0/0
+  ip ospf authentication key-chain MPLS-KEYS
+  end
+~~~
+
+<br>
+<br>
+
+---
+&nbsp;
+
+Route Summarization & Filtering
+~~~
+!@RR
+conf t
+ int lo10
+  ip add 100.8.1.1 255.255.255.0
+  ip ospf 1 area 100
+ int lo11
+  ip add 100.8.10.1 255.255.255.252
+  ip ospf 1 area 100
+ int lo12
+  ip add 100.8.14.1 255.255.252.0
+  ip ospf 1 area 100
+ int lo13
+  ip add 100.8.35.1 255.255.224.0
+  ip ospf 1 area 100
+ int lo14
+  ip add 200.8.72.1 255.255.255.0
+  ip ospf 1 area 200
+ int lo15
+  ip add 200.8.80.1 255.255.255.0
+  ip ospf 1 area 200
+ int lo16
+  ip add 200.8.99.1 255.255.255.0
+  ip ospf 1 area 200
+ int lo17
+  ip add 210.8.1.1 255.255.255.252
+  ip ospf 1 area 210
+ int lo18
+  ip add 210.8.12.1 255.255.248.0
+  ip ospf 1 area 210
+ int lo19
+  ip add 210.8.35.1 255.255.224.0
+  ip ospf 1 area 210
+ int lo20
+  ip add 210.8.65.1 255.255.192.0
+  ip ospf 1 area 210
+ !
+ router ospf 1
+  passive-interface lo10
+  passive-interface lo11
+  passive-interface lo12
+  passive-interface lo13
+  passive-interface lo14
+  passive-interface lo15
+  passive-interface lo16
+  passive-interface lo17
+  passive-interface lo18
+  passive-interface lo19
+  passive-interface lo20
+  end
+~~~
+
+<br>
+
+1. Summarize Routes from area 100
+~~~
+!@RR
+conf t
+ router ospf 1
+  area 100 range 100.8.0.0 255.255.192.0
+  end
+~~~
+
+2. Summarize routes from area 200
+
+~~~
+!@RR
+conf t
+ router ospf 1
+  area 200 range 200.8.64.0 255.255.192.0
+  end
+~~~
+
+3. Filter routes from area 210 from entering area 0
+
+~~~
+!@RR
+conf t
+ ip prefix-list BLOCK_210 seq 5 deny 210.8.1.0/17 le 32
+ ip prefix-list BLOCK_210 seq 10 PERMIT 0.0.0.0/0 le 32
+ router ospf 1
+  area 210 filter-list prefix BLOCK_210 out
+  end
+~~~
+
+<br>
+<br>
+
+---
+&nbsp;
+
+### LDP
+Configure LDP
+
+~~~
+!@MPLS Devices
+conf t
+ router ospf 1
+  mpls ldp auto
+  end
+show mpls ldp neigh
+~~~
+
+
+Are all MPLS devices configured properly?
+
+
+
+
+
+
+
+
+
+
+Why did the RouteReflector fail to configure ldp?
+
+~~~
+!@RR
+show mpls ldp discovery detail
+~~~
+
+<br>
+
+~~~
+!@RR
+conf t
+ mpls ldp router-id e0/1 force
+ end
+show mpls ldp neigh
+~~~
+
+<br>
+<br>
+
+---
+&nbsp;
+
+### mBGP VPNv4
+
+Configure BGP VPNv4 for ProviderEdges and RouteReflector.
+- ProviderEdges MUST only form an adjacency to the RouteReflector, NOT to other ProviderEdges.
+- Peer template must be used.
+
+BGP 
+- 6 bit ASN
+- 4 byte ASN
+
+~~~
+!@RR
+conf t
+ router bgp 2.42000
+  bgp log-neighbor-changes
+  no synchronization
+  no bgp default ipv4-unicast
+  template peer-session TEMP-PEER
+   remote-as 2.42000
+   update-source lo1
+  exit
+  template peer-policy TEMP-POL
+   send-community extended
+   route-reflector-client
+   end
+~~~
+
+<br>
+
+~~~
+!@PE-1,PE-2,PE-3,PE-4
+conf t
+ router bgp 2.42000
+  bgp log-neighbor-changes
+  no synchronization
+  no bgp default ipv4-unicast
+  template peer-session TEMP-PEER
+   remote-as 2.42000
+   update-source lo0
+  exit
+  template peer-policy TEMP-POL
+   send-community extended
+   route-reflector-client
+   end
+~~~
+
+<br>
+
+Establish VPNv4 Peering between RR & PE Routers
+~~~
+!@RR
+conf t
+ router bgp 2.42000
+  neighbor 172.16.8.1 inherit peer-session TEMP-PEER
+  neighbor 172.16.8.2 inherit peer-session TEMP-PEER
+  neighbor 172.16.8.3 inherit peer-session TEMP-PEER
+  neighbor 172.16.8.4 inherit peer-session TEMP-PEER
+  address-family vpnv4
+   neighbor 172.16.8.1 activate
+   neighbor 172.16.8.1 inherit peer-policy TEMP-POL
+   neighbor 172.16.8.2 activate
+   neighbor 172.16.8.2 inherit peer-policy TEMP-POL
+   neighbor 172.16.8.3 activate
+   neighbor 172.16.8.3 inherit peer-policy TEMP-POL
+   neighbor 172.16.8.4 activate
+   neighbor 172.16.8.4 inherit peer-policy TEMP-POL
+   end
+~~~
+
+<br>
+
+~~~
+!@PE-1,PE-2,PE-3,PE-4
+conf t
+ router bgp 2.42000
+  neighbor 10.8.101.8 inherit peer-session TEMP-PEER
+  address-family vpnv4
+   neighbor 10.8.101.8 activate
+   neighbor 10.8.101.8 send-community extended
+   end
+sh bgp vpnv4 unicast all summary
+~~~
+
+<br>
+
+### VRF
+Configure VRFs for Customer A & B
+~~~
+!@PE-1,PE-2,PE-3,PE-4
+conf t
+ ip vrf cust-a
+  rd 100:1
+  route-target both 100:1
+ ip vrf cust-b
+  rd 200:1
+  route-target both 200:1
+  end
+~~~
+
+<br>
+
+~~~
+!@PE-1
+conf t
  int e0/1
-  ip add 11.0.1.11 255.255.255.0
+  ip vrf forwarding cust-a
+  ip add 10.1.1.2 255.255.255.252
+  no shut
+  end
+~~~
+
+<br>
+
+~~~
+!@PE-2
+conf t
+ int e0/1
+  ip vrf forwarding cust-a
+  ip add 10.1.2.2 255.255.255.248
   no shut
  int e0/2
-  ip add 12.0.2.11 255.255.255.0
-  no shut
- int e0/3
-  ip add 13.0.3.11 255.255.255.0
+  ip vrf forwarding cust-b
+  ip add 10.1.2.2 255.255.255.248
   no shut
   end
+~~~
 
+<br>
 
-
-TASK 1: Configure BGP 
-
-!@I1
+~~~
+!@PE-3
 conf t
- no router bgp 11
- router bgp 11
-  bgp log-neighbor-changes
-  neighbor 11.0.0.10 remote-as 123
-  neighbor 11.0.1.1 remote-as 123
-  neighbor 12.0.2.2 remote-as 123
-  neighbor 13.0.3.3 remote-as 123
-  address-family ipv4
-   neighbor 11.0.0.10 activate
-   neighbor 11.0.1.1 activate
-   neighbor 12.0.2.2 activate
-   neighbor 13.0.3.3 activate
-   network 8.8.8.8 mask 255.255.255.255
-   network 11.0.0.0 mask 255.255.255.0
-   network 11.0.1.0 mask 255.255.255.0
-   network 12.0.2.0 mask 255.255.255.0
-   network 13.0.3.0 mask 255.255.255.0
-   end
-   
-!@HQ
-conf t
- no router bgp 123
- router bgp 123
-  bgp log-neighbor-changes
-  neighbor 11.0.0.11 remote-as 11
-  address-family ipv4
-   neighbor 11.0.0.11 activate
-   network 10.10.10.10 mask 255.255.255.255
-   network 11.0.0.0 mask 255.255.255.0
-   end
-
-!@E1
-conf t
- no router bgp 123
- router bgp 123
-  bgp log-neighbor-changes
-  neighbor 11.0.1.11 remote-as 11
-  address-family ipv4
-   neighbor 11.0.1.11 activate
-   network 1.1.1.1 mask 255.255.255.255
-   network 11.0.1.0 mask 255.255.255.0
-   end
-
-!@E2
-conf t
- no router bgp 123
- router bgp 123
-  bgp log-neighbor-changes
-  neighbor 12.0.2.11 remote-as 11
-  address-family ipv4
-   neighbor 12.0.2.11 activate
-   network 2.2.2.2 mask 255.255.255.255
-   network 12.0.2.0 mask 255.255.255.0
-   end
-
-!@E3
-conf t
- no router bgp 123
- router bgp 123
-  bgp log-neighbor-changes
-  neighbor 13.0.3.11 remote-as 11
-  address-family ipv4
-   neighbor 13.0.3.11 activate
-   network 3.3.3.3 mask 255.255.255.255
-   network 13.0.3.0 mask 255.255.255.0
-   end
- 
-
-Can HQ ping the loopback of the other EDGE Branches?
-
-!@HQ
-ping 1.1.1.1
-ping 2.2.2.2
-ping 3.3.3.3
-
-
-### Configure ALLOWAS-IN  &&  AS-OVERRIDE
-- For E1 & E2, utilize ALLOWAS-IN
-- For E3 & HQ, utilize AS-OVERRIDE
-
-!@E1
-conf t
- router bgp 123
-  address-family ipv4
-   neighbor 11.0.1.11 allowas-in
-   end
-
-!@E2
-conf t
- router bgp 123
-  address-family ipv4
-   neighbor 12.0.2.11 allowas-in
-   end
-
-
---
-
-!@I1
-conf t
- router bgp 11
-  address-family ipv4
-   neighbor 11.0.0.10 AS-OVERRIDE
-   neighbor 13.0.3.3 AS-OVERRIDE
-   end
-   
-   
-   
-
-### Configure NAT
-
-1. Define INSIDE & OUTSIDE
-!@HQ
-conf t
- int lo1
-  ip nat inside
- int range e0/0
-  ip nat outside
-  end
-
-!@E1,E2,E3
-conf t
- int e0/0
-  ip nat outside
  int e0/1
-  ip nat inside
-  end
-
-2. MATCH TRAFFIC
-
-!@HQ
-conf t
- no ip access-list extended NAT-POLICY
- ip access-list extended NAT-POLICY
-  deny ip host 10.10.10.10 10.0.1.0 0.0.0.255 
-  deny ip host 10.10.10.10 10.0.2.0 0.0.0.255 
-  deny ip host 10.10.10.10 10.0.3.0 0.0.0.255 
-  permit ip any any
-  end
-
-!@E1
-conf t
- no ip access-list extended NAT-POLICY
- ip access-list extended NAT-POLICY
-  deny ip 10.0.1.0 0.0.0.255 10.0.10.0 0.0.0.255
-  deny ip 10.0.1.0 0.0.0.255 10.0.2.0 0.0.0.255
-  deny ip 10.0.1.0 0.0.0.255 10.0.3.0 0.0.0.255
-  permit ip any any
-  end
-
-!@E2
-conf t
- no ip access-list extended NAT-POLICY
- ip access-list extended NAT-POLICY
-  deny ip 10.0.2.0 0.0.0.255 10.0.10.0 0.0.0.255
-  deny ip 10.0.2.0 0.0.0.255 10.0.1.0 0.0.0.255
-  deny ip 10.0.2.0 0.0.0.255 10.0.3.0 0.0.0.255
-  permit ip any any
-  end
-
-!@E3
-conf t
- no ip access-list extended NAT-POLICY
- ip access-list extended NAT-POLICY
-  deny ip 10.0.3.0 0.0.0.255 10.0.10.0 0.0.0.255
-  deny ip 10.0.3.0 0.0.0.255 10.0.1.0 0.0.0.255
-  deny ip 10.0.3.0 0.0.0.255 10.0.2.0 0.0.0.255
-  permit ip any any
-  end
-
-
-3. Apply PAT
-
-!@HQ,E1,E2,E3
-conf t
- ip nat inside source list NAT-POLICY int e0/0 overload
- end
-
-
-
-### Configure S2S VPN
-
-HQ - E1
-1. Configure GRE IP
-
-!@HQ
-conf t
- int tun1
-  ip add 172.16.1.10 255.255.255.0
-  tunnel source e0/0
-  tunnel destination 11.0.1.1
-  tunnel mode gre ip
+  ip vrf forwarding cust-a
+  ip add 10.2.2.6 255.255.255.252
   no shut
   end
+~~~
 
-!@E1
+<br>
+
+~~~
+!@PE-4
 conf t
- int tun1
-  ip add 172.16.1.1 255.255.255.0
-  tunnel source e0/0
-  tunnel destination 11.0.0.10
-  tunnel mode gre ip
+ int range e0/1
+  ip vrf forwarding cust-b
+  ip add 10.2.2.2 255.255.255.252
+  no shut
+ int range e0/2
+  ip vrf forwarding cust-a
+  ip add 10.2.2.2 255.255.255.252
   no shut
   end
+~~~
+
+<br>
+<br>
+
+---
+&nbsp;
+
+### Customer Sites
 
 
-2. Route interesting traffic
 
-!@HQ
+
+
+
+
+
+
+
+
+
+
+
+
+HQ Site
+EIGRP
+
+!@HQ-A
 conf t
- ip route 10.0.1.0 255.255.255.0 172.16.1.1
- end
+ router eigrp CCNP
+  address-family ipv4 uni a 100
+   network 10.0.0.0 0.0.0.3
+   network 10.1.1.0 0.0.0.3
+   network 10.12.12.0 0.0.0.3
+   af-interface e0/0
+    passive-interface
+   end
 
-!@E1
+
+!@HQ-B
 conf t
- ip route 10.0.10.0 255.255.255.0 172.16.1.10
+ router eigrp CCNP
+  address-family ipv4 uni a 100
+   network 10.1.2.0 0.0.0.7
+   network 10.12.12.0 0.0.0.3
+   end
+
+!@S1
+conf t
+ ip route 0.0.0.0 0.0.0.0 10.0.0.2
  end
  
+---
 
-3. Configure ISAKMP Policy - IKE Phase 1
-
-!@HQ,E1
+!@PE-1
 conf t
- crypto isakmp policy 1
-  authentication pre-share
-  encryption aes 256
-  hash sha256
-  group 14
-  exit
-  end
+ router eigrp CCNP
+  address-family ipv4 uni vrf cust-a a 100
+   network 10.1.1.0 0.0.0.3
+   end
 
-
-4. Create IPSec Profile/Crypto Maps - IKE Phase 2
-
-!@HQ,E1
+!@PE-2
 conf t
- crypto ipsec transform-set IPSEC-TUNNEL esp-aes 256 esp-sha-hmac
-  mode transport
-  exit
- crypto ipsec profile IPSEC-VPN
-  set transform-set IPSEC-TUNNEL
-  set pfs group14
-  end
+ router eigrp CCNP
+  address-family ipv4 uni vrf cust-a a 100
+   network 10.1.2.0 0.0.0.3
+   end
 
 
-5. Apply IPSec Profile Protection to Tunnel
+---
 
-!@HQ,E1
+Branch 1 - SPOKE
+EIGRP
+
+!@A-B1
 conf t
- int tun1
-  tunnel protection ipsec profile IPSEC-VPN
-  end
+ router eigrp CCNP
+  address-family ipv4 uni a 100
+   network 10.40.5.100 0.0.0.3
+   network 10.2.2.4 0.0.0.3
+   af-interface e0/0
+    passive-interface
+	end
 
-
-Are the your packets encrypted?
-
+!@PE-3
+conf t
+ router eigrp CCNP
+  address-family ipv4 uni vrf cust-a a 100
+   network 10.2.2.4 0.0.0.3
+   end
+   
 !@P1
-ping 10.0.10.10
-
-
-
-Why not?
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Add A PSK
-
-!@HQ
 conf t
- crypto isakmp key hq-e1 address 11.0.1.1
+ ip route 0.0.0.0 0.0.0.0 10.40.5.102 
  end
 
-!@E1
+
+---
+
+Branch 2 - SPOKE
+EIGRP
+
+!@A-B2
 conf t
- crypto isakmp key hq-e1 address 11.0.0.10
+ router eigrp CCNP
+  address-family ipv4 uni a 100
+   network 10.2.2.0 0.0.0.3
+   end
+
+!@PE-4
+conf t
+ router eigrp CCNP
+  address-family ipv4 uni vrf cust-a a 100
+   network 10.2.2.0 0.0.0.3
+   end
+
+
+---
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+### NetFlow & SPAN
+Monitor MPLS Traffic from Wireshark
+
+SPAN
+!@D1
+conf t
+ monitor session 1 source int e0/2
+ monitor session 1 destination int e0/0
  end
- 
- 
- 
- 
- 
-### Configure DMVPN
 
-1. Configure ISAKMP POLICY & IPSEC PROFILE
 
-!@HQ-HUB, E1-SPOKE, E2-SPOKE, E3-SPOKE
+Old
+!@C1
 conf t
- crypto isakmp policy 1
-  authentication pre-share
-  encryption aes 256
-  hash sha256
-  group 14
-  exit
- crypto ipsec transform-set IPSEC-TUNNEL esp-aes 256 esp-sha-hmac
-  mode transport
-  exit
- crypto ipsec profile IPSEC-VPN
-  set transform-set IPSEC-TUNNEL
-  set pfs group14
-  end
+ flow record FLOW-RECORD
+  match ipv4 source address
+  match ipv4 destination address
+  match transport source-port
+  match transport destination-port
+  collect counter bytes
+  collect counter packets
+ flow exporter FLOW-EXPORTER
+  destination 69.0.1.2
+  transport udp 2055
+  export-protocol netflow-v9
+ flow monitor FLOW-MONITOR
+  record FLOW-RECORD
+  exporter FLOW-EXPORTER
+ interface range e0/0-3
+  ip flow monitor FLOW-MONITOR input
+  ip flow monitor FLOW-MONITOR output
+end
 
 
-2. Configure Tunnel
-
-!@HQ - HUB
-conf t
- int tun2
-  ip add 172.16.2.10 255.255.255.0
-  tunnel mode gre multipoint
-  tunnel source e0/0 
-  tunnel protection ipsec profile IPSEC-VPN shared
-  end
-
-!@E1 - SPOKE
-conf t
- int tun2
-  ip add 172.16.2.1 255.255.255.0
-  tunnel mode gre multipoint
-  tunnel source e0/0
-  tunnel protection ipsec profile IPSEC-VPN shared
-  end
-
-!@E2 - SPOKE
-conf t
- int tun2
-  ip add 172.16.2.2 255.255.255.0
-  tunnel mode gre multipoint
-  tunnel source e0/0
-  tunnel protection ipsec profile IPSEC-VPN shared
-  end
-
-!@E3 - SPOKE
-conf t
- int tun2
-  ip add 172.16.2.3 255.255.255.0
-  tunnel mode gre multipoint
-  tunnel source e0/0
-  tunnel protection ipsec profile IPSEC-VPN shared
-  end
-
-
-3. Configure NHRP
-
-!@HQ
-conf t
- int tun2
-  ip nhrp authentication C1sc0123
-  ip nhrp map multicast dynamic
-  ip nhrp network-id 123
-  end
-  
-!@E1,E2,E3
-conf t
- int tun2
-  ip nhrp authentication C1sc0123
-  ip nhrp network-id 123
-  ip nhrp map multicast 11.0.0.10
-  ip nhrp nhs 172.16.2.10
-  ip nhrp map 172.16.2.10 11.0.0.10
-  end
-
-
-4. Configure Tunnel Routing
-
-!@HQ
-conf t
- ip route 10.0.1.0 255.255.255.0 172.16.2.1
- ip route 10.0.1.0 255.255.255.0 172.16.2.1
- ip route 10.0.1.0 255.255.255.0 172.16.2.1
- end
- 
-!@E1
-conf t
- ip route 10.
+Wireshark
+cflow.dstport == 23

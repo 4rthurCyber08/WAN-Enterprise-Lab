@@ -1,0 +1,510 @@
+RST MultiSite
+--
+
+S2S VPN + PKI Server
+
+!@All Devices
+conf t  
+ enable secret pass
+ no logging cons
+ no ip domain lookup
+ no ip http server
+ no ip http secure-server
+ line vty 0 4
+  password pass
+  login
+  exec-timeout 0 0
+  end
+
+
+### Apply IP addressing  
+
+!@HQ
+conf t
+ hostname HQ
+ int lo0
+  ip add 10.10.10.10 255.255.255.255
+ int lo1
+  ip add 10.0.10.10 255.255.255.0
+ int e0/0
+  ip add 11.0.0.10  255.255.255.0
+  no shut
+  end
+
+!@E1
+conf t
+ hostname E1
+ int lo0
+  ip add 1.1.1.1 255.255.255.255
+ int e0/0
+  ip add 11.0.1.1 255.255.255.0
+  no shut
+ int e0/1
+  ip add 10.0.1.1 255.255.255.0
+  no shut
+  end
+
+!@E2
+conf t
+ hostname E2
+ int lo0
+  ip add 2.2.2.2 255.255.255.255
+ int e0/0
+  ip add 12.0.2.2 255.255.255.0
+  no shut
+ int e0/1
+  ip add 10.0.2.2 255.255.255.0
+  no shut
+  end
+
+!@E3
+conf t
+ hostname E3
+ int lo0
+  ip add 3.3.3.3 255.255.255.255
+ int e0/0
+  ip add 13.0.3.3 255.255.255.0
+  no shut
+ int e0/1
+  ip add 10.0.3.3 255.255.255.0
+  no shut
+  end
+
+!@P1
+conf t
+ hostname P1
+ int e0/0
+  ip add 10.0.1.101 255.255.255.0
+  no shut
+ ip route 0.0.0.0 0.0.0.0 10.0.1.1
+  end
+
+!@P2
+conf t
+ hostname P2
+ int e0/0
+  ip add 10.0.2.102 255.255.255.0
+  no shut
+ ip route 0.0.0.0 0.0.0.0 10.0.2.2
+  end
+  
+!@P3
+conf t
+ hostname P3
+ int e0/0
+  ip add 10.0.3.103 255.255.255.0
+  no shut
+ ip route 0.0.0.0 0.0.0.0 10.0.3.3
+  end
+
+!@I1
+conf t
+ hostname I1
+ int lo0
+  ip add 8.8.8.8 255.255.255.255
+ int e0/0
+  ip add 11.0.0.11 255.255.255.0
+  no shut
+ int e0/1
+  ip add 11.0.1.11 255.255.255.0
+  no shut
+ int e0/2
+  ip add 12.0.2.11 255.255.255.0
+  no shut
+ int e0/3
+  ip add 13.0.3.11 255.255.255.0
+  no shut
+  end
+
+
+
+TASK 1: Configure BGP 
+
+!@I1
+conf t
+ no router bgp 11
+ router bgp 11
+  bgp log-neighbor-changes
+  neighbor 11.0.0.10 remote-as 123
+  neighbor 11.0.1.1 remote-as 123
+  neighbor 12.0.2.2 remote-as 123
+  neighbor 13.0.3.3 remote-as 123
+  address-family ipv4
+   neighbor 11.0.0.10 activate
+   neighbor 11.0.1.1 activate
+   neighbor 12.0.2.2 activate
+   neighbor 13.0.3.3 activate
+   network 8.8.8.8 mask 255.255.255.255
+   network 11.0.0.0 mask 255.255.255.0
+   network 11.0.1.0 mask 255.255.255.0
+   network 12.0.2.0 mask 255.255.255.0
+   network 13.0.3.0 mask 255.255.255.0
+   end
+   
+!@HQ
+conf t
+ no router bgp 123
+ router bgp 123
+  bgp log-neighbor-changes
+  neighbor 11.0.0.11 remote-as 11
+  address-family ipv4
+   neighbor 11.0.0.11 activate
+   network 10.10.10.10 mask 255.255.255.255
+   network 11.0.0.0 mask 255.255.255.0
+   end
+
+!@E1
+conf t
+ no router bgp 123
+ router bgp 123
+  bgp log-neighbor-changes
+  neighbor 11.0.1.11 remote-as 11
+  address-family ipv4
+   neighbor 11.0.1.11 activate
+   network 1.1.1.1 mask 255.255.255.255
+   network 11.0.1.0 mask 255.255.255.0
+   end
+
+!@E2
+conf t
+ no router bgp 123
+ router bgp 123
+  bgp log-neighbor-changes
+  neighbor 12.0.2.11 remote-as 11
+  address-family ipv4
+   neighbor 12.0.2.11 activate
+   network 2.2.2.2 mask 255.255.255.255
+   network 12.0.2.0 mask 255.255.255.0
+   end
+
+!@E3
+conf t
+ no router bgp 123
+ router bgp 123
+  bgp log-neighbor-changes
+  neighbor 13.0.3.11 remote-as 11
+  address-family ipv4
+   neighbor 13.0.3.11 activate
+   network 3.3.3.3 mask 255.255.255.255
+   network 13.0.3.0 mask 255.255.255.0
+   end
+ 
+
+Can HQ ping the loopback of the other EDGE Branches?
+
+!@HQ
+ping 1.1.1.1
+ping 2.2.2.2
+ping 3.3.3.3
+
+
+### Configure ALLOWAS-IN  &&  AS-OVERRIDE
+- For E1 & E2, utilize ALLOWAS-IN
+- For E3 & HQ, utilize AS-OVERRIDE
+
+!@E1
+conf t
+ router bgp 123
+  address-family ipv4
+   neighbor 11.0.1.11 allowas-in
+   end
+
+!@E2
+conf t
+ router bgp 123
+  address-family ipv4
+   neighbor 12.0.2.11 allowas-in
+   end
+
+
+--
+
+!@I1
+conf t
+ router bgp 11
+  address-family ipv4
+   neighbor 11.0.0.10 AS-OVERRIDE
+   neighbor 13.0.3.3 AS-OVERRIDE
+   end
+   
+   
+   
+
+### Configure NAT
+
+1. Define INSIDE & OUTSIDE
+!@HQ
+conf t
+ int lo1
+  ip nat inside
+ int range e0/0
+  ip nat outside
+  end
+
+!@E1,E2,E3
+conf t
+ int e0/0
+  ip nat outside
+ int e0/1
+  ip nat inside
+  end
+
+2. MATCH TRAFFIC
+
+!@HQ
+conf t
+ no ip access-list extended NAT-POLICY
+ ip access-list extended NAT-POLICY
+  deny ip host 10.10.10.10 10.0.1.0 0.0.0.255 
+  deny ip host 10.10.10.10 10.0.2.0 0.0.0.255 
+  deny ip host 10.10.10.10 10.0.3.0 0.0.0.255 
+  permit ip any any
+  end
+
+!@E1
+conf t
+ no ip access-list extended NAT-POLICY
+ ip access-list extended NAT-POLICY
+  deny ip 10.0.1.0 0.0.0.255 10.0.10.0 0.0.0.255
+  deny ip 10.0.1.0 0.0.0.255 10.0.2.0 0.0.0.255
+  deny ip 10.0.1.0 0.0.0.255 10.0.3.0 0.0.0.255
+  permit ip any any
+  end
+
+!@E2
+conf t
+ no ip access-list extended NAT-POLICY
+ ip access-list extended NAT-POLICY
+  deny ip 10.0.2.0 0.0.0.255 10.0.10.0 0.0.0.255
+  deny ip 10.0.2.0 0.0.0.255 10.0.1.0 0.0.0.255
+  deny ip 10.0.2.0 0.0.0.255 10.0.3.0 0.0.0.255
+  permit ip any any
+  end
+
+!@E3
+conf t
+ no ip access-list extended NAT-POLICY
+ ip access-list extended NAT-POLICY
+  deny ip 10.0.3.0 0.0.0.255 10.0.10.0 0.0.0.255
+  deny ip 10.0.3.0 0.0.0.255 10.0.1.0 0.0.0.255
+  deny ip 10.0.3.0 0.0.0.255 10.0.2.0 0.0.0.255
+  permit ip any any
+  end
+
+
+3. Apply PAT
+
+!@HQ,E1,E2,E3
+conf t
+ ip nat inside source list NAT-POLICY int e0/0 overload
+ end
+
+
+
+### Configure S2S VPN
+
+HQ - E1
+1. Configure GRE IP
+
+!@HQ
+conf t
+ int tun1
+  ip add 172.16.1.10 255.255.255.0
+  tunnel source e0/0
+  tunnel destination 11.0.1.1
+  tunnel mode gre ip
+  no shut
+  end
+
+!@E1
+conf t
+ int tun1
+  ip add 172.16.1.1 255.255.255.0
+  tunnel source e0/0
+  tunnel destination 11.0.0.10
+  tunnel mode gre ip
+  no shut
+  end
+
+
+2. Route interesting traffic
+
+!@HQ
+conf t
+ ip route 10.0.1.0 255.255.255.0 172.16.1.1
+ end
+
+!@E1
+conf t
+ ip route 10.0.10.0 255.255.255.0 172.16.1.10
+ end
+ 
+
+3. Configure ISAKMP Policy - IKE Phase 1
+
+!@HQ,E1
+conf t
+ crypto isakmp policy 1
+  authentication pre-share
+  encryption aes 256
+  hash sha256
+  group 14
+  exit
+  end
+
+
+4. Create IPSec Profile/Crypto Maps - IKE Phase 2
+
+!@HQ,E1
+conf t
+ crypto ipsec transform-set IPSEC-TUNNEL esp-aes 256 esp-sha-hmac
+  mode transport
+  exit
+ crypto ipsec profile IPSEC-VPN
+  set transform-set IPSEC-TUNNEL
+  set pfs group14
+  end
+
+
+5. Apply IPSec Profile Protection to Tunnel
+
+!@HQ,E1
+conf t
+ int tun1
+  tunnel protection ipsec profile IPSEC-VPN
+  end
+
+
+Are the your packets encrypted?
+
+!@P1
+ping 10.0.10.10
+
+
+
+Why not?
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Add A PSK
+
+!@HQ
+conf t
+ crypto isakmp key hq-e1 address 11.0.1.1
+ end
+
+!@E1
+conf t
+ crypto isakmp key hq-e1 address 11.0.0.10
+ end
+ 
+ 
+ 
+ 
+ 
+### Configure DMVPN
+
+1. Configure ISAKMP POLICY & IPSEC PROFILE
+
+!@HQ-HUB, E1-SPOKE, E2-SPOKE, E3-SPOKE
+conf t
+ crypto isakmp policy 1
+  authentication pre-share
+  encryption aes 256
+  hash sha256
+  group 14
+  exit
+ crypto ipsec transform-set IPSEC-TUNNEL esp-aes 256 esp-sha-hmac
+  mode transport
+  exit
+ crypto ipsec profile IPSEC-VPN
+  set transform-set IPSEC-TUNNEL
+  set pfs group14
+  end
+
+
+2. Configure Tunnel
+
+!@HQ - HUB
+conf t
+ int tun2
+  ip add 172.16.2.10 255.255.255.0
+  tunnel mode gre multipoint
+  tunnel source e0/0 
+  tunnel protection ipsec profile IPSEC-VPN shared
+  end
+
+!@E1 - SPOKE
+conf t
+ int tun2
+  ip add 172.16.2.1 255.255.255.0
+  tunnel mode gre multipoint
+  tunnel source e0/0
+  tunnel protection ipsec profile IPSEC-VPN shared
+  end
+
+!@E2 - SPOKE
+conf t
+ int tun2
+  ip add 172.16.2.2 255.255.255.0
+  tunnel mode gre multipoint
+  tunnel source e0/0
+  tunnel protection ipsec profile IPSEC-VPN shared
+  end
+
+!@E3 - SPOKE
+conf t
+ int tun2
+  ip add 172.16.2.3 255.255.255.0
+  tunnel mode gre multipoint
+  tunnel source e0/0
+  tunnel protection ipsec profile IPSEC-VPN shared
+  end
+
+
+3. Configure NHRP
+
+!@HQ
+conf t
+ int tun2
+  ip nhrp authentication C1sc0123
+  ip nhrp map multicast dynamic
+  ip nhrp network-id 123
+  end
+  
+!@E1,E2,E3
+conf t
+ int tun2
+  ip nhrp authentication C1sc0123
+  ip nhrp network-id 123
+  ip nhrp map multicast 11.0.0.10
+  ip nhrp nhs 172.16.2.10
+  ip nhrp map 172.16.2.10 11.0.0.10
+  end
+
+
+4. Configure Tunnel Routing
+
+!@HQ
+conf t
+ ip route 10.0.1.0 255.255.255.0 172.16.2.1
+ ip route 10.0.1.0 255.255.255.0 172.16.2.1
+ ip route 10.0.1.0 255.255.255.0 172.16.2.1
+ end
+ 
+!@E1
+conf t
+ ip route 10.

@@ -805,35 +805,13 @@ conf t
 ~~~
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### NetFlow & SPAN
-Monitor MPLS Traffic from Wireshark
+As an ISP, charge clients based on consumption
+- Configure C1 to monitor flow traffic
+- Use flexible netflow
+- Export flows to D1
 
-SPAN
-!@D1
-conf t
- monitor session 1 source int e0/2
- monitor session 1 destination int e0/0
- end
-
-
-Old
+~~~
 !@C1
 conf t
  flow record FLOW-RECORD
@@ -841,6 +819,8 @@ conf t
   match ipv4 destination address
   match transport source-port
   match transport destination-port
+  match ipv4 protocol
+  match ipv4 version
   collect counter bytes
   collect counter packets
  flow exporter FLOW-EXPORTER
@@ -854,7 +834,151 @@ conf t
   ip flow monitor FLOW-MONITOR input
   ip flow monitor FLOW-MONITOR output
 end
+~~~
 
+
+- Configure D1 to mirror traffic from C1 to the flow collector RSTVM
+~~~
+!@D1
+conf t
+ monitor session 1 source int e0/2
+ monitor session 1 destination int e0/0
+ end
+~~~
 
 Wireshark
 cflow.dstport == 23
+
+
+### Site-to-Site & DMVPN
+Configure Site-to-Site VPN for Cust-B 
+- Authentication must be via PSK
+- Password: VPN-Bkey
+- Use a Crypto Map
+
+IKE Phase 1 – Routers exchange keys securely (like a private handshake).
+IKE Phase 2 – They agree on how to encrypt real data (the “data tunnel”).
+Crypto Map – Tells router which traffic to encrypt (based on ACL).
+IPsec SA (Security Association) – The live, active tunnel where packets get encrypted.
+Encapsulation – Each packet from LAN A → LAN B gets wrapped (encrypted) before it leaves the WAN.
+
+Phase 1 (ISAKMP)
+~~~
+!@HQ-Z,B-B1
+conf t
+ crypto isakmp key VPN-Bkey address 10.2.2.1
+ crypto isakmp policy 1
+  authentication pre-share
+  encr aes 256
+  hash sha512
+  group 14
+  lifetime 86400
+  end
+~~~
+
+Interesting Traffic
+~~~
+!@HQ-Z
+conf t
+ access-list 100 permit ip 10.255.10.0 0.0.0.255 10.40.5.100 0.0.0.3
+ end
+~~~
+
+~~~
+!@B-B1
+conf t
+ access-list 100 permit ip 10.40.5.100 0.0.0.3 10.255.10.0 0.0.0.255
+ end
+~~~
+
+Phase 2 (IPSec)
+~~~
+!@HQ-Z
+conf t
+ crypto ipsec transform-set IPSEC-SET esp-aes esp-sha512-hmac
+  mode transport
+  exit
+ crypto map VPN-MAP 1 ipsec-isakmp
+  set peer 10.2.2.1
+  set transform-set IPSEC-SET
+  match address 100
+  exit
+ int e0/3
+  crypto map VPN-MAP
+  end
+~~~
+
+~~~
+!@B-B1
+conf t
+ crypto ipsec transform-set IPSEC-SET esp-aes esp-sha512-hmac
+  mode transport
+  exit
+ crypto map VPN-MAP 1 ipsec-isakmp
+  set peer 10.1.2.1
+  set transform-set IPSEC-SET
+  match address 100
+  exit
+ int e0/2
+  crypto map VPN-MAP
+  end
+~~~
+
+
+Did the tunnel form?
+
+Fix the tunnel
+~~~
+!@B-B1
+conf t
+ crypto isakmp key VPN-Bkey address 10.1.2.1
+ end
+~~~
+
+### GRE over IPSec
+Protect Different Traffic Types (Unicast, Multicast, & Broadcast)
+~~~
+!@HQ-Z
+conf t
+ int tun1
+  ip add 172.16.1.1 255.255.255.0
+  tunnel source e0/3
+  tunnel destination 10.2.2.1
+  tunnel mode gre ip
+  end
+~~~
+
+~~~
+!@B-B1
+conf t
+ int tun1
+  ip add 172.16.1.2 255.255.255.0
+  tunnel source e0/2
+  tunnel destination 10.1.2.1
+  tunnel mode gre ip
+  end
+~~~
+
+Protect the GRE Tunnel
+!@B-B1
+conf t
+ crypto ipsec profile VPN-PROFILE
+  set transform-set IPSEC-SET
+  set pfs group14
+ int tunnel 1
+  tunnel protection ipsec profile VPN-PROFILE
+  end
+
+
+
+
+
+
+
+
+IKEv2
+
+Configure DMVPN for Cust-A
+- Authentication must be via Certificate/RSA Signature
+- Use IPSec Profile
+

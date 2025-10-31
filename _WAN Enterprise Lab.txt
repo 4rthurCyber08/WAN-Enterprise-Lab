@@ -785,8 +785,9 @@ conf t
   exit
  router eigrp CCNP
   address-family ipv4 unicast vrf cust-a a 100
-   redistribute bgp 2.42000
-   end
+   topology base
+    redistribute bgp 2.42000
+    end
 ~~~
 
 
@@ -935,6 +936,9 @@ conf t
  end
 ~~~
 
+
+
+
 ### GRE over IPSec
 Protect Different Traffic Types (Unicast, Multicast, & Broadcast)
 ~~~
@@ -960,16 +964,25 @@ conf t
 ~~~
 
 Protect the GRE Tunnel
-!@B-B1
+!@HQ-Z,B-B1
 conf t
  crypto ipsec profile VPN-PROFILE
   set transform-set IPSEC-SET
   set pfs group14
  int tunnel 1
   tunnel protection ipsec profile VPN-PROFILE
-  end
+  end 
 
+Route Interesting traffic through the tunnel
+!@HQ-Z
+conf t
+ ip route 10.40.5.100 255.255.255.252 172.16.1.2
+ end
 
+!@B-B1
+conf t
+ ip route 10.255.10.0 255.255.255.0 172.16.1.1
+ end
 
 
 
@@ -982,3 +995,27 @@ Configure DMVPN for Cust-A
 - Authentication must be via Certificate/RSA Signature
 - Use IPSec Profile
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+TSHOOT B-B1
+duplicate IP
+
+!@B-B1
+conf t
+ int e0/1
+  ip add 82.2.2.1 255.255.255.0
+  end

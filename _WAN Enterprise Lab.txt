@@ -493,6 +493,7 @@ sh bgp vpnv4 unicast all summary
 
 ### VRF
 Configure VRFs for Customer A & B
+(OLD VRF Config)
 ~~~
 !@PE-1,PE-2,PE-3,PE-4
 conf t
@@ -507,11 +508,42 @@ conf t
 
 <br>
 
+(NEW VRF Config)
+~~~
+!@PE-1,PE-2,PE-3,PE-4
+conf t
+ vrf definition cust-a
+  rd 100:1
+  route-target both 100:1
+  address-family ipv4
+ vrf definition cust-b
+  rd 200:1
+  route-target both 200:1
+  address-family ipv4
+  end
+~~~
+
+<br>
+
+(OLD VRF Config)
 ~~~
 !@PE-1
 conf t
  int e0/1
   ip vrf forwarding cust-a
+  ip add 10.1.1.2 255.255.255.252
+  no shut
+  end
+~~~
+
+<br>
+
+(NEW VRF Config)
+~~~
+!@PE-1
+conf t
+ int e0/1
+  vrf forwarding cust-a
   ip add 10.1.1.2 255.255.255.252
   no shut
   end
@@ -790,6 +822,8 @@ conf t
     end
 ~~~
 
+<br>
+
 
 ### CUST-B
 ~~~
@@ -805,12 +839,21 @@ conf t
   end
 ~~~
 
+<br>
 
 ### NetFlow & SPAN
 As an ISP, charge clients based on consumption
 - Configure C1 to monitor flow traffic
 - Use flexible netflow
 - Export flows to D1
+
+> RECORD - Flow data to match
+> EXPORTER - destination and protocol
+> MONITOR - Connect RECORD & EXPORTER
+
+> Assign to interfaces
+
+<br>
 
 ~~~
 !@C1
@@ -837,6 +880,7 @@ conf t
 end
 ~~~
 
+<br>
 
 - Configure D1 to mirror traffic from C1 to the flow collector RSTVM
 ~~~
@@ -847,8 +891,354 @@ conf t
  end
 ~~~
 
-Wireshark
-cflow.dstport == 23
+<br>
+
+
+
+### INET BGP
+Configure BGP on EDGE and INET Routers
+Assign the ff ASN:
+- I1 & I3: ASN 13
+- I2: ASN 20
+Advertise only I2s loopback 8 and the public network of each HQ & branches
+
+~~~
+!@I1
+conf t
+ no router bgp 13
+ router bgp 13
+  bgp log-neighbor-changes
+  neighbor 41.1.1.2 remote-as 1
+  neighbor 41.1.1.6 remote-as 1
+  neighbor 82.2.2.2 remote-as 2
+  neighbor 1.1.2.2 remote-as 20
+  neighbor 1.1.3.3 remote-as 13
+  address-family ipv4
+   end
+~~~
+
+<br>
+
+~~~
+!@I2
+conf t
+ router bgp 20
+  bgp log-neighbor-changes
+  neighbor 1.1.2.1 remote-as 13
+  neighbor 1.2.3.3 remote-as 13
+  neighbor 84.4.4.2 remote-as 2
+  address-family ipv4
+   network 8.8.8.8 mask 255.255.255.255
+   end
+~~~
+
+<br>
+
+~~~
+!@I3
+conf t
+ router bgp 13
+  bgp log-neighbor-changes
+  neighbor 1.1.3.1 remote-as 13
+  neighbor 1.2.3.2 remote-as 20
+  neighbor 82.2.2.1 remote-as 2
+  neighbor 42.2.2.2 remote-as 1
+  address-family ipv4
+   end
+~~~
+
+<br>
+
+~~~
+!@HQ-B
+conf t
+ router bgp 1
+  bgp log-neighbor-changes
+  neighbor 41.1.1.1 remote-as 13
+  neighbor 41.1.1.5 remote-as 13
+  address-family ipv4
+   network 41.1.1.0 mask 255.255.255.252
+   network 41.1.1.4 mask 255.255.255.252
+   end
+~~~
+
+<br>
+
+~~~
+!@HQ-Z
+conf t
+ router bgp 2
+  bgp log-neighbor-changes
+  neighbor 82.2.2.1 remote-as 13
+  neighbor 84.4.4.1 remote-as 20
+  address-family ipv4
+   network 84.4.4.0 mask 255.255.255.248
+   network 82.2.2.0 mask 255.255.255.248
+   end
+~~~
+
+<br>
+
+~~~
+!@A-B2
+conf t
+ router bgp 1
+  bgp log-neighbor-changes
+  neighbor 42.2.2.3 remote-as 13
+  address-family ipv4
+   network 42.2.2.0 mask 255.255.255.0
+   end
+~~~
+
+<br>
+
+~~~
+!@B-B1
+conf t
+ router bgp 2
+  bgp log-neighbor-changes
+  neighbor 82.2.2.3 remote-as 13
+  address-family ipv4
+   network 82.2.2.0 mask 255.255.255.0
+   end
+~~~
+
+<br>
+
+Verify: Was there any errors?
+
+~~~
+!@B-B1
+conf t
+ int e0/1
+  ip add 82.2.2.1 255.255.255.0
+  no shut
+ router bgp 2
+  bgp log-neighbor-changes
+  neighbor 82.2.2.3 remote-as 13
+  address-family ipv4
+   network 82.2.2.0 mask 255.255.255.0
+   end
+~~~
+
+### NAT & IP SLA
+Configure NAT on Edge Routers connected to INET
+- Configure NAT on HQ-B & HQ-Z. Make sure there is failover when there is more than one OUTSIDE interface.
+- Make sure 8.8.8.8 is pingable on all HQ & Branches
+
+### CUST-A
+Define OUTSIDE and INSIDE
+~~~
+!@HQ-B
+conf t
+ int e0/0
+  ip nat inside
+ int range e0/2-3
+  ip nat outside
+  end
+~~~
+
+MATCH Traffic
+~~~
+!@HQ-B
+conf t
+ access-list 10 permit 10.12.12.0 0.0.0.3
+ access-list 10 permit 10.0.0.1 0.0.0.3
+ end
+~~~
+
+Create a route map
+~~~
+!@HQ-B
+conf t
+ route-map NAT_ISP1 permit 10
+  match ip address 10
+  match interface e0/2
+ route-map NAT_ISP2 permit 10
+  match ip address 10
+  match interface e0/3
+  end
+~~~
+
+<br>
+
+Configure NAT using route map
+~~~
+!@HQ-B
+conf t
+ ip nat inside source route-map NAT_ISP1 int e0/2 overload
+ ip nat inside source route-map NAT_ISP2 int e0/3 overload
+ end
+~~~
+
+<br>
+
+Failover
+IP SLA
+~~~
+!@HQ-B
+conf t
+ ip sla 1
+  icmp-echo 8.8.8.8 source-int e0/2
+  frequency 5
+  exit
+ ip sla schedule 1 life forever start-time now
+ end
+~~~
+
+<br>
+
+Create a Track Object
+~~~
+!@HQ-B
+conf t
+ track 1 ip sla 1 reachability
+ end
+~~~
+
+<br>
+
+Default routes with failover
+~~~
+!@HQ-B
+conf t
+ ip route 0.0.0.0 0.0.0.0 41.1.1.1 track 1
+ ip route 0.0.0.0 0.0.0.0 41.1.1.5 250
+ end
+~~~
+
+There is no default-information originate command in EIGRP
+Simply redistribute static routes, specifically the default static route.
+
+~~~
+!@HQ-B
+conf t
+ router eigrp CCNP
+  address-family ipv4 unicast a 100
+   topology base
+    redistribute static
+	end
+~~~
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+### CUST-B
+Define OUTSIDE and INSIDE
+~~~
+!@HQ-Z
+conf t
+ int e0/0
+  ip nat inside
+ int range e0/1-2
+  ip nat outside
+  end
+~~~
+
+MATCH Traffic
+~~~
+!@HQ-Z
+conf t
+ access-list 10 permit 10.255.10.0 0.0.0.255
+ end
+~~~
+
+Create a route map
+~~~
+!@HQ-Z
+conf t
+ route-map NAT_ISP1 permit 10
+  match ip address 10
+  match interface e0/1
+ route-map NAT_ISP2 permit 10
+  match ip address 10
+  match interface e0/2
+  end
+~~~
+
+<br>
+
+Configure NAT using route map and NAT Pool
+~~~
+!@HQ-Z
+conf t
+ ip nat pool POOL84 84.4.4.2 84.4.4.6 netmask 255.255.255.248  
+ ip nat pool POOL82 82.2.2.2 82.2.2.6 netmask 255.255.255.248
+ ip nat inside source route-map NAT_ISP1 pool POOL84 overload
+ ip nat inside source route-map NAT_ISP2 pool POOL82 overload
+ end
+~~~
+
+<br>
+
+Failover
+IP SLA
+~~~
+!@HQ-Z
+conf t
+ ip sla 1
+  icmp-echo 8.8.8.8 source-int e0/1
+  frequency 5
+  exit
+ ip sla schedule 1 life forever start-time now
+ end
+~~~
+
+<br>
+
+Create a Track Object
+~~~
+!@HQ-Z
+conf t
+ track 1 ip sla 1 reachability
+ end
+~~~
+
+<br>
+
+Default routes with failover
+~~~
+!@HQ-Z
+conf t
+ ip route 0.0.0.0 0.0.0.0 84.4.4.1 track 1
+ ip route 0.0.0.0 0.0.0.0 82.2.2.1 250
+ end
+~~~
+
+
+
+Config NAT on BRANCHES
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 ### Site-to-Site & DMVPN
@@ -867,15 +1257,17 @@ Phase 1 (ISAKMP)
 ~~~
 !@HQ-Z,B-B1
 conf t
- crypto isakmp key VPN-Bkey address 10.2.2.1
+ crypto isakmp key HQZKEY address 10.2.2.1
  crypto isakmp policy 1
   authentication pre-share
   encr aes 256
-  hash sha512
+  hash sha256
   group 14
   lifetime 86400
   end
 ~~~
+
+<br>
 
 Interesting Traffic
 ~~~
@@ -885,6 +1277,8 @@ conf t
  end
 ~~~
 
+<br>
+
 ~~~
 !@B-B1
 conf t
@@ -892,11 +1286,13 @@ conf t
  end
 ~~~
 
+<br>
+
 Phase 2 (IPSec)
 ~~~
 !@HQ-Z
 conf t
- crypto ipsec transform-set IPSEC-SET esp-aes esp-sha512-hmac
+ crypto ipsec transform-set IPSEC-SET esp-aes esp-sha256-hmac
   mode transport
   exit
  crypto map VPN-MAP 1 ipsec-isakmp
@@ -912,7 +1308,7 @@ conf t
 ~~~
 !@B-B1
 conf t
- crypto ipsec transform-set IPSEC-SET esp-aes esp-sha512-hmac
+ crypto ipsec transform-set IPSEC-SET esp-aes esp-sha256-hmac
   mode transport
   exit
  crypto map VPN-MAP 1 ipsec-isakmp

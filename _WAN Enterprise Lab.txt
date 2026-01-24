@@ -1,5 +1,5 @@
-MPLS
 
+## MPLS Cloud
 ### OSPF
 Configure OSPF
 - Advertise connected routes that are part of the MPLS Cloud
@@ -10,7 +10,6 @@ Configure OSPF
   PE3 = 3
   PE4 = 4
 - Advertise RouteReflector Loopback 1 IP only
-
 ~~~
 !@C1
 conf t
@@ -902,6 +901,7 @@ Assign the ff ASN:
 - I2: ASN 20
 Advertise only I2s loopback 8 and the public network of each HQ & branches
 
+INET ROUTERS
 ~~~
 !@I1
 conf t
@@ -949,6 +949,7 @@ conf t
 
 <br>
 
+EDGE ROUTERS
 ~~~
 !@HQ-B
 conf t
@@ -1005,21 +1006,66 @@ conf t
 
 <br>
 
-Verify: Was there any errors?
+Verify: Was there any errors? 
+TSHOOT 
+
+~~~
+!@INET ROUTERS
+show bgp summary
+~~~
+
+
+If there are issues, solve it by NOT removing the entire bgp instance on the routers.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+~~~
+!@I3
+conf t
+ int e0/2
+  ip add 82.2.8.3 255.255.255.0
+  no shut
+ router bgp 13
+  no neighbor 82.2.2.1 remote-as 2
+  neighbor 82.2.8.1 remote-as 2
+  end
+~~~
+
+<br>
 
 ~~~
 !@B-B1
 conf t
  int e0/1
-  ip add 82.2.2.1 255.255.255.0
+  ip add 82.2.8.1 255.255.255.0
   no shut
  router bgp 2
-  bgp log-neighbor-changes
-  neighbor 82.2.2.3 remote-as 13
+  no neighbor 82.2.2.3 remote-as 13
+  neighbor 82.2.8.3 remote-as 13
   address-family ipv4
-   network 82.2.2.0 mask 255.255.255.0
+   no network 82.2.2.0 mask 255.255.255.0
+   network 82.2.8.0 mask 255.255.255.0
    end
 ~~~
+
+
+
 
 ### NAT & IP SLA
 Configure NAT on Edge Routers connected to INET
@@ -1037,6 +1083,8 @@ conf t
   ip nat outside
   end
 ~~~
+
+<br>
 
 MATCH Traffic
 ~~~
@@ -1137,7 +1185,28 @@ conf t
 
 
 
-### CUST-B
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+### CUST-B (HQ-Z)
 Define OUTSIDE and INSIDE
 ~~~
 !@HQ-Z
@@ -1221,10 +1290,44 @@ conf t
 
 
 
-Config NAT on BRANCHES
 
 
 
+
+
+
+Config NAT on BRANCH-SITES
+### CUST-A
+~~~
+!@A-B2
+conf t
+ int e0/2
+  ip nat outside
+ int e0/3
+  ip nat inside
+  no shut
+  ip add 192.168.2.1 255.255.255.0
+  exit
+ access-list 10 permit 192.168.2.0 0.0.0.255
+ ip nat inside source list 10 int e0/2 overload
+ end
+~~~
+
+<br>
+
+### CUST-B
+~~~
+!@B-B1
+conf t
+ int e0/1
+  ip nat outside
+ int e0/0
+  ip nat inside
+  exit
+ access-list 10 permit 10.40.5.100 0.0.0.3
+ ip nat inside source list 10 int e0/1 overload
+ end
+~~~
 
 
 

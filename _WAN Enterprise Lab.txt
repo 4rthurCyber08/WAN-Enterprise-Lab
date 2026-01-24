@@ -1344,11 +1344,29 @@ conf t
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
 ### Site-to-Site & DMVPN
 Configure Site-to-Site VPN for Cust-B 
 - Authentication must be via PSK
 - Password: VPN-Bkey
 - Use a Crypto Map
+
+> VPN IKEv1 using Crypto Map            [ HQ-Z > B-B1 ]
+> IKEv1 IPSec Profile (GRE over IPSec)  [ HQ-Z > A-B1 ]
+> VPN IKEv2 via VTI (GRE over IPSec)    [ HQ-Z > A-B2 ]
+
 
 IKE Phase 1 – Routers exchange keys securely (like a private handshake).
 IKE Phase 2 – They agree on how to encrypt real data (the “data tunnel”).
@@ -1356,11 +1374,43 @@ Crypto Map – Tells router which traffic to encrypt (based on ACL).
 IPsec SA (Security Association) – The live, active tunnel where packets get encrypted.
 Encapsulation – Each packet from LAN A → LAN B gets wrapped (encrypted) before it leaves the WAN.
 
+
+
+Determine the ff values:
+                         SITE A (HQ-Z)                 SITE B (B-B1)
+Phase 1
+  PSK:
+  Peer:
+  Encryption:
+  Integrity:
+  DH Group:
+
+Phase 2
+  ESP-Encryption:
+  ESP-Hash:
+
+<br>
+
 Phase 1 (ISAKMP)
 ~~~
-!@HQ-Z,B-B1
+!@HQ-Z
 conf t
- crypto isakmp key HQZKEY address 10.2.2.1
+ crypto isakmp key VPN-Bkey address 10.2.2.1
+ crypto isakmp policy 1
+  authentication pre-share
+  encr aes 256
+  hash sha256
+  group 14
+  lifetime 86400
+  end
+~~~
+
+<br>
+
+~~~
+!@B-B1
+conf t
+ crypto isakmp key VPN-Bkey address 10.1.2.1
  crypto isakmp policy 1
   authentication pre-share
   encr aes 256
@@ -1376,7 +1426,7 @@ Interesting Traffic
 ~~~
 !@HQ-Z
 conf t
- access-list 100 permit ip 10.255.10.0 0.0.0.255 10.40.5.100 0.0.0.3
+ access-list 100 permit ip 10.255.10.100 0.0.0.0 10.40.5.101 0.0.0.0
  end
 ~~~
 
@@ -1385,7 +1435,7 @@ conf t
 ~~~
 !@B-B1
 conf t
- access-list 100 permit ip 10.40.5.100 0.0.0.3 10.255.10.0 0.0.0.255
+ access-list 100 permit ip 10.40.5.101 0.0.0.0 10.255.10.100 0.0.0.0
  end
 ~~~
 
@@ -1395,51 +1445,120 @@ Phase 2 (IPSec)
 ~~~
 !@HQ-Z
 conf t
- crypto ipsec transform-set IPSEC-SET esp-aes esp-sha256-hmac
+ crypto ipsec transform-set IPSEC-SET esp-aes 256 esp-sha256-hmac
   mode transport
   exit
- crypto map VPN-MAP 1 ipsec-isakmp
+ crypto map VPN-CRYPTO-MAP 1 ipsec-isakmp
   set peer 10.2.2.1
   set transform-set IPSEC-SET
   match address 100
   exit
  int e0/3
-  crypto map VPN-MAP
+  crypto map VPN-CRYPTO-MAP
   end
 ~~~
 
 ~~~
 !@B-B1
 conf t
- crypto ipsec transform-set IPSEC-SET esp-aes esp-sha256-hmac
+ crypto ipsec transform-set IPSEC-SET esp-aes 256 esp-sha256-hmac
   mode transport
   exit
- crypto map VPN-MAP 1 ipsec-isakmp
+ crypto map VPN-CRYPTO-MAP 1 ipsec-isakmp
   set peer 10.1.2.1
   set transform-set IPSEC-SET
   match address 100
   exit
  int e0/2
-  crypto map VPN-MAP
+  crypto map VPN-CRYPTO-MAP
   end
 ~~~
 
+<br>
 
-Did the tunnel form?
+### GRE over IPSec
+Protect Different Traffic Types (Unicast, Multicast, & Broadcast)
 
-Fix the tunnel
+                         SITE A (HQ-Z)                 SITE B (B-B1)
+Phase 1
+  PSK:                   VPN-Bkey                      VPN-Bkey
+  Peer:                  10.2.2.1                      10.1.2.1
+  Encryption:            AES-256                       AES-256
+  Integrity:             SHA-256                       AES-256
+  DH Group:              14                            14
+
+Phase 2
+  ESP-Encryption:        AES-256                       AES-256  
+  ESP-Hash:              SHA-256-HMAC                  SHA-256-HMAC
+
+Tunnel
+  Tunnel IP:
+  Source Int:
+  Destination IP:
+  Tunnel Mode:
+
+<br>
+
+~~~
+!@HQ-Z
+conf t
+ crypto isakmp key VPN-Bkey address 10.2.2.1
+ crypto isakmp policy 1
+  authentication pre-share
+  encr aes 256
+  hash sha256
+  group 14
+  lifetime 86400
+  end
+~~~
+
+<br>
+
 ~~~
 !@B-B1
 conf t
  crypto isakmp key VPN-Bkey address 10.1.2.1
+ crypto isakmp policy 1
+  authentication pre-share
+  encr aes 256
+  hash sha256
+  group 14
+  lifetime 86400
+  end
+~~~
+
+<br>
+
+Interesting Traffic
+~~~
+!@HQ-Z
+conf t
+ access-list 100 permit ip 10.255.10.100 0.0.0.0 10.40.5.101 0.0.0.0
  end
 ~~~
 
+<br>
 
+~~~
+!@B-B1
+conf t
+ access-list 100 permit ip 10.40.5.101 0.0.0.0 10.255.10.100 0.0.0.0
+ end
+~~~
 
+<br>
 
-### GRE over IPSec
-Protect Different Traffic Types (Unicast, Multicast, & Broadcast)
+Phase 2 (IPSec)
+~~~
+!@HQ-Z
+conf t
+ crypto ipsec transform-set IPSEC-SET esp-aes 256 esp-sha256-hmac
+  mode transport
+  end
+~~~
+
+<br>
+
 ~~~
 !@HQ-Z
 conf t
@@ -1461,6 +1580,10 @@ conf t
   tunnel mode gre ip
   end
 ~~~
+
+
+
+
 
 Protect the GRE Tunnel
 !@HQ-Z,B-B1

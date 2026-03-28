@@ -1,17 +1,15 @@
 
-Rivan Day 5
-
-## Review: MPLS Cloud
-
-### OSPF
-- Advertise connected routes that are part of the MPLS Cloud
-- Advertise RouteReflector Loopback 1 IP only
+## OSPF
+- Configure loopback 0 on both C1 & C2 with 1.1.1.1 & 2.2.2.2 respectively
+- Advertise RouteReflector Connected & Loopback 1 IP only
 
 <br>
 
 | Routers      | Area |
 | ---          | ---  |
-| C1 - C2 - RR | 0    |
+| C1 - C2      | 0    |
+| RR - C1      | 12   |
+| RR - C2      | 12   |
 | PE-1 - C1    | 1    |
 | PE-2 - C1    | 2    |
 | PE-3 - C2    | 3    |
@@ -26,15 +24,14 @@ conf t
   ip add 1.1.1.1 255.255.255.255
  router ospf 1
   router-id 1.1.1.1
+   auto-cost reference-bandwidth 100000
    network 1.1.1.1 0.0.0.0 area 0
-   network 10.8.1.0 0.0.0.255 area 0
+   network 10.8.1.0 0.0.0.255 area 12
    network 10.8.12.0 0.0.0.255 area 0
    network 10.8.0.0 0.0.0.127 area 1
    network 10.8.0.128 0.0.0.127 area 2
   end
 ~~~
-
-<br>
 
 ~~~
 !@C2
@@ -43,31 +40,33 @@ conf t
   ip add 2.2.2.2 255.255.255.255
  router ospf 1
   router-id 2.2.2.2
+   auto-cost reference-bandwidth 100000
    network 2.2.2.2 0.0.0.0 area 0
-   network 10.8.2.0 0.0.0.255 area 0
+   network 10.8.2.0 0.0.0.255 area 12
    network 10.8.12.0 0.0.0.255 area 0
-   !
    network 10.8.3.0 0.0.0.255 area 3
    network 10.8.4.0 0.0.0.255 area 4
   end
 ~~~
 
-<br>
-
 ~~~
 !@RR
 conf t
  router ospf 1
-   network 10.8.1.0 0.0.0.255 area 0
-   network 10.8.2.0 0.0.0.255 area 0
-   network 10.8.101.8 0.0.0.255 area 0
-  exit
+  auto-cost reference-bandwidth 100000
+  network 10.8.1.0 0.0.0.255 area 12
+  network 10.8.2.0 0.0.0.255 area 12
+  network 10.8.101.8 0.0.0.255 area 12
   end
 ~~~
 
+
 <br>
 
-Router deciding on an RID
+
+### Review: What will be the OSPF Router ID of RR?
+
+How is a router id decided  
 1. Manual Configuration
 2. Highest Loopback IP
 3. Highest IP Address
@@ -86,11 +85,13 @@ show ip ospf database
 
 
 ### OSPF Advertisement without Network statement
+
 ~~~
 !@PE-1
 conf t
  router ospf 1
   router-id 172.16.8.1
+  auto-cost reference-bandwidth 100000
   exit
  int lo0
   ip ospf 1 area 1
@@ -106,6 +107,7 @@ conf t
 conf t
  router ospf 1
   router-id 172.16.8.2
+  auto-cost reference-bandwidth 100000
   exit
  int lo0
   ip ospf 1 area 2
@@ -121,6 +123,7 @@ conf t
 conf t
  router ospf 1
   router-id 172.16.8.3
+  auto-cost reference-bandwidth 100000
   exit
  int lo0
   ip ospf 1 area 3
@@ -136,6 +139,7 @@ conf t
 conf t
  router ospf 1
   router-id 172.16.8.4
+  auto-cost reference-bandwidth 100000
   exit
  int lo0
   ip ospf 1 area 4
@@ -152,7 +156,31 @@ conf t
 &nbsp;
 
 
-### Reduce unnecessary network traffic.
+### Exercise 01 - Determine the OSPF Cost for the path from PE-1 to PE-4
+
+~~~
+!@Cisco
+show int | inc BW
+~~~
+
+
+
+
+Answer: 30_000
+OSPF Cost caps at 65_536
+
+
+<br>
+<br>
+
+---
+&nbsp;
+
+
+## Optimize Routing Traffic Flow
+
+- Manipulate Hello Packets
+- Configure Passive-Interfaces
 
 ~~~
 !@C1,C2
@@ -165,8 +193,6 @@ conf t
   ip ospf dead-interval 120
   end
 ~~~
-
-<br>
 
 ~~~
 !@RR
@@ -182,8 +208,6 @@ conf t
   ip ospf dead-interval 120
   end
 ~~~
-
-<br>
 
 ~~~
 !@PE-1,PE-2,PE-3,PE-4
@@ -212,37 +236,37 @@ conf t
 conf t
  int lo10
   ip add 100.8.1.1 255.255.255.0
-  ip ospf 1 area 100
+  ip ospf 1 area 12
  int lo11
   ip add 100.8.10.1 255.255.255.252
-  ip ospf 1 area 100
+  ip ospf 1 area 12
  int lo12
   ip add 100.8.14.1 255.255.252.0
-  ip ospf 1 area 100
+  ip ospf 1 area 12
  int lo13
   ip add 100.8.35.1 255.255.224.0
-  ip ospf 1 area 100
+  ip ospf 1 area 12
  int lo14
   ip add 200.8.72.1 255.255.255.0
-  ip ospf 1 area 200
+  ip ospf 1 area 12
  int lo15
   ip add 200.8.80.1 255.255.255.0
-  ip ospf 1 area 200
+  ip ospf 1 area 12
  int lo16
   ip add 200.8.99.1 255.255.255.0
-  ip ospf 1 area 200
+  ip ospf 1 area 12
  int lo17
   ip add 210.8.1.1 255.255.255.252
-  ip ospf 1 area 210
+  ip ospf 1 area 12
  int lo18
   ip add 210.8.12.1 255.255.248.0
-  ip ospf 1 area 210
+  ip ospf 1 area 12
  int lo19
   ip add 210.8.35.1 255.255.224.0
-  ip ospf 1 area 210
+  ip ospf 1 area 12
  int lo20
   ip add 210.8.65.1 255.255.192.0
-  ip ospf 1 area 210
+  ip ospf 1 area 12
  !
  router ospf 1
   passive-interface lo10
@@ -264,11 +288,11 @@ conf t
 <br>
 
 
-1. Summarize Routes from area 100
-- 100.8.1.1/24
-- 100.8.10.1/30
-- 100.8.14.1/22
-- 100.8.35.1/19
+1. Summarize Routes from area 12 starting with 100.x.x.x
+- 100.8.1.1/24  
+- 100.8.10.1/30  
+- 100.8.14.1/22  
+- 100.8.35.1/19  
 
 <br>
 
@@ -305,7 +329,7 @@ conf t
 <br>
 
 
-2. Summarize routes from area 200
+2. Summarize routes from area 12 starting with 200.x.x.x
 - 200.8.72.0/24
 - 200.8.80.0/24
 - 200.8.99.0/24
@@ -325,7 +349,7 @@ conf t
 <br>
 
 
-3. Filter routes from area 210 from entering area 0
+3. Filter routes with 210.x.x.x from entering area 0
 
 ~~~
 !@RR
@@ -343,6 +367,106 @@ conf t
 
 ---
 &nbsp;
+
+
+
+### OSPF LSA & Area Types
+
+| Area Type     | LSA       |
+| ---           | ---       |
+| Normal        | 1,2,3,4,5 |
+| Stub          | 1,2,3     |
+| Totally Stub  | 1,2       |
+| Not So Stubby | 1,2,3,7   |
+|
+
+<br>
+
+__STUB & TOTALLY STUBBY__
+~~~
+!@C1,C2
+conf t 
+ router ospf 1
+ area 12 stub no-summary
+ end
+~~~
+
+~~~
+!@RR
+conf t
+ router ospf 1
+  area 12 stub
+  end
+~~~
+
+<br>
+
+__NOT SO STUBBY__
+~~~
+!@C1,C2
+conf t
+ router ospf 1
+  area 1 nssa
+  area 2 nssa
+  area 3 nssa
+  area 4 nssa
+  end
+~~~
+
+~~~
+!@PE-1
+conf t
+ router ospf 1
+  area 1 nssa
+  end  
+~~~
+
+~~~
+!@PE-2
+conf t
+ router ospf 1
+  area 2 nssa
+  end  
+~~~
+
+~~~
+!@PE-3
+conf t
+ router ospf 1
+  area 3 nssa
+  end  
+~~~
+
+~~~
+!@PE-4
+conf t
+ router ospf 1
+  area 4 nssa
+  end  
+~~~
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 ### OSPF Network Types & Interface Priority
@@ -1897,4 +2021,3 @@ conf t
 show ip nhrp
 show dmvpn
 ~~~
-

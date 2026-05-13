@@ -671,13 +671,15 @@ ping 172.16.8.1 source 10.8.104.8
 <br>
 
 Stub Configs Block inter-area routes
-
+Totally NSSA Allows inter-area routes 
 ~~~
 !@C1,C2
 conf t
  router ospf 1
   no  area 12 stub no-summary
   no  area 12 stub
+  area 12 nssa no-summary
+  end
 ~~~
 
 ~~~
@@ -685,6 +687,7 @@ conf t
 conf t
  router ospf 1
   no  area 12 stub
+  area 12 nssa
   end
 ~~~
 

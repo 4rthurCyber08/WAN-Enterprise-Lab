@@ -163,8 +163,16 @@ conf t
 show int | inc BW
 ~~~
 
+~~~
+100_000_000 mbps
+/
+100_00
+-----------------
+10_000 * 3
 
-
+Answer: 30_000
+OSPF Cost caps at 65_536
+~~~
 
 Answer: 30_000
 OSPF Cost caps at 65_536
@@ -232,41 +240,41 @@ conf t
 ### Route Summarization & Filtering
 
 ~~~
-!@RR
+!@C1
 conf t
  int lo10
   ip add 100.8.1.1 255.255.255.0
-  ip ospf 1 area 12
+  ip ospf 1 area 100
  int lo11
   ip add 100.8.10.1 255.255.255.252
-  ip ospf 1 area 12
+  ip ospf 1 area 100
  int lo12
   ip add 100.8.14.1 255.255.252.0
-  ip ospf 1 area 12
+  ip ospf 1 area 100
  int lo13
   ip add 100.8.35.1 255.255.224.0
-  ip ospf 1 area 12
+  ip ospf 1 area 100
  int lo14
   ip add 200.8.72.1 255.255.255.0
-  ip ospf 1 area 12
+  ip ospf 1 area 200
  int lo15
   ip add 200.8.80.1 255.255.255.0
-  ip ospf 1 area 12
+  ip ospf 1 area 200
  int lo16
   ip add 200.8.99.1 255.255.255.0
-  ip ospf 1 area 12
+  ip ospf 1 area 200
  int lo17
   ip add 210.8.1.1 255.255.255.252
-  ip ospf 1 area 12
+  ip ospf 1 area 210
  int lo18
   ip add 210.8.12.1 255.255.248.0
-  ip ospf 1 area 12
+  ip ospf 1 area 210
  int lo19
   ip add 210.8.35.1 255.255.224.0
-  ip ospf 1 area 12
+  ip ospf 1 area 210
  int lo20
   ip add 210.8.65.1 255.255.192.0
-  ip ospf 1 area 12
+  ip ospf 1 area 210
  !
  router ospf 1
   passive-interface lo10
@@ -317,7 +325,7 @@ __Step 4__: Decide an i that will summarize all digits within the octet.
 <br>
 
 ~~~
-!@RR
+!@C1
 conf t
  router ospf 1
   area 100 range 100.8.0.0 255.255.192.0
@@ -337,7 +345,7 @@ conf t
 <br>
 
 ~~~
-!@RR
+!@C1
 conf t
  router ospf 1
   area 200 range 200.8.64.0 255.255.192.0
@@ -352,7 +360,7 @@ conf t
 3. Filter routes with 210.x.x.x from entering area 0
 
 ~~~
-!@RR
+!@C1
 conf t
  ip prefix-list BLOCK_210 seq 5 deny 210.8.1.0/17 le 32
  ip prefix-list BLOCK_210 seq 10 PERMIT 0.0.0.0/0 le 32
@@ -376,7 +384,7 @@ conf t
 | ---           | ---       |
 | Normal        | 1,2,3,4,5 |
 | Stub          | 1,2,3     |
-| Totally Stub  | 1,2       |
+| Totally Stub  | 1,2       | Inject OSPF Default Route |
 | Not So Stubby | 1,2,3,7   |
 |
 
@@ -406,10 +414,10 @@ __NOT SO STUBBY__
 !@C1,C2
 conf t
  router ospf 1
-  area 1 nssa
-  area 2 nssa
-  area 3 nssa
-  area 4 nssa
+  area 1 nssa no-summary
+  area 2 nssa no-summary
+  area 3 nssa no-summary
+  area 4 nssa no-summary
   end
 ~~~
 
@@ -446,27 +454,11 @@ conf t
 ~~~
 
 
+<br>
+<br>
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+---
+&nbsp;
 
 
 ### OSPF Network Types & Interface Priority
@@ -555,6 +547,8 @@ conf t
 ~~~
 !@MPLS Devices
 conf t
+ ip cef
+ mpls ip
  router ospf 1
   mpls ldp auto
   end
@@ -600,7 +594,7 @@ conf t
   no bgp default ipv4-unicast
   template peer-session TEMP-PEER
    remote-as 2.42000
-   update-source lo1
+   update-source loopback1
   exit
   template peer-policy TEMP-POL
    send-community extended
@@ -617,7 +611,7 @@ conf t
   no bgp default ipv4-unicast
   template peer-session TEMP-PEER
    remote-as 2.42000
-   update-source lo0
+   update-source loopback0
   exit
   template peer-policy TEMP-POL
    send-community extended
@@ -661,6 +655,37 @@ conf t
    neighbor 10.8.101.8 send-community extended
    end
 sh bgp vpnv4 unicast all summary
+~~~
+
+
+<br>
+<br>
+
+__TShoot__
+~~~
+!@RR
+show bgp vpnv4 unicast all summary
+ping 172.16.8.1 source 10.8.104.8
+~~~
+
+<br>
+
+Stub Configs Block inter-area routes
+
+~~~
+!@C1,C2
+conf t
+ router ospf 1
+  no  area 12 stub no-summary
+  no  area 12 stub
+~~~
+
+~~~
+!@RR
+conf t
+ router ospf 1
+  no  area 12 stub
+  end
 ~~~
 
 

@@ -397,6 +397,7 @@ conf t
  router ospf 1
  area 12 stub no-summary
  end
+sh ip ospf neigh
 ~~~
 
 ~~~
@@ -405,6 +406,8 @@ conf t
  router ospf 1
   area 12 stub
   end
+sh ip ospf neigh
+sh ip route
 ~~~
 
 <br>
@@ -414,10 +417,10 @@ __NOT SO STUBBY__
 !@C1,C2
 conf t
  router ospf 1
-  area 1 nssa no-summary
-  area 2 nssa no-summary
-  area 3 nssa no-summary
-  area 4 nssa no-summary
+  area 1 nssa 
+  area 2 nssa 
+  area 3 nssa 
+  area 4 nssa 
   end
 ~~~
 
@@ -555,8 +558,42 @@ conf t
 show mpls ldp neigh
 ~~~
 
+<br>
 
-Why did the RouteReflector fail to configure ldp?
+~~~
+!@C1,C2
+conf t
+ int range e0/0-3
+  mpls mtu override 1512
+  end
+~~~
+
+<br>
+
+~~~
+!@RR
+conf t
+ int range e0/1-2
+  mpls mtu override 1512
+  end
+~~~
+
+<br>
+
+~~~
+!@PE-1,PE-2,PE-3,PE-3,PE-4
+conf t
+ int range e0/0
+  mpls mtu override 1512
+  end
+~~~
+
+
+<br>
+<br>
+
+
+### __TSHOOT__ : Why did the RouteReflector fail to configure ldp?
 
 ~~~
 !@RR
@@ -585,6 +622,7 @@ BGP
 - 6 bit ASN
 - 4 byte ASN
 
+Establish VPNv4 Peering between RR & PE Routers
 ~~~
 !@RR
 conf t
@@ -599,36 +637,7 @@ conf t
   template peer-policy TEMP-POL
    send-community extended
    route-reflector-client
-   end
-~~~
-
-~~~
-!@PE-1,PE-2,PE-3,PE-4
-conf t
- router bgp 2.42000
-  bgp log-neighbor-changes
-  no synchronization
-  no bgp default ipv4-unicast
-  template peer-session TEMP-PEER
-   remote-as 2.42000
-   update-source loopback0
-  exit
-  template peer-policy TEMP-POL
-   send-community extended
-   route-reflector-client
-   end
-~~~
-
-
-<br>
-<br>
-
-
-Establish VPNv4 Peering between RR & PE Routers
-~~~
-!@RR
-conf t
- router bgp 2.42000
+  !
   neighbor 172.16.8.1 inherit peer-session TEMP-PEER
   neighbor 172.16.8.2 inherit peer-session TEMP-PEER
   neighbor 172.16.8.3 inherit peer-session TEMP-PEER
@@ -649,6 +658,17 @@ conf t
 !@PE-1,PE-2,PE-3,PE-4
 conf t
  router bgp 2.42000
+  bgp log-neighbor-changes
+  no synchronization
+  no bgp default ipv4-unicast
+  template peer-session TEMP-PEER
+   remote-as 2.42000
+   update-source loopback0
+  exit
+  template peer-policy TEMP-POL
+   send-community extended
+   route-reflector-client
+  !
   neighbor 10.8.101.8 inherit peer-session TEMP-PEER
   address-family vpnv4
    neighbor 10.8.101.8 activate
@@ -661,11 +681,12 @@ sh bgp vpnv4 unicast all summary
 <br>
 <br>
 
-__TShoot__
+
+### __TSHOOT__ : Why did RR fail to form a vpnv4 peer with PE Routers
 ~~~
 !@RR
 show bgp vpnv4 unicast all summary
-ping 172.16.8.1 source 10.8.104.8
+ping 172.16.8.1 source 10.8.104.8     !BGP Doesn't need Router-ID to be routed
 ~~~
 
 <br>
@@ -680,6 +701,7 @@ conf t
   no  area 12 stub
   area 12 nssa no-summary
   end
+show ip ospf neigh
 ~~~
 
 ~~~
@@ -689,6 +711,7 @@ conf t
   no  area 12 stub
   area 12 nssa
   end
+show ip ospf neigh
 ~~~
 
 
@@ -701,6 +724,7 @@ conf t
 
 ### VRF
 
+__CLASSIC VRF__
 ~~~
 !@PE-1,PE-2,PE-3,PE-4
 conf t
@@ -712,6 +736,22 @@ conf t
   route-target both 200:1
   end
 ~~~
+
+<br>
+
+~~~
+!@PE-1
+conf t
+ int e0/1
+  ip vrf forwarding cust-a
+  ip add 10.1.1.2 255.255.255.252
+  no shut
+  end
+~~~
+
+
+<br>
+<br>
 
 
 __VRF DEFINITION__
@@ -726,16 +766,6 @@ conf t
   rd 200:1
   route-target both 200:1
   address-family ipv4
-  end
-~~~
-
-~~~
-!@PE-1
-conf t
- int e0/1
-  ip vrf forwarding cust-a
-  ip add 10.1.1.2 255.255.255.252
-  no shut
   end
 ~~~
 

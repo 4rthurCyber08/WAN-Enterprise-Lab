@@ -563,6 +563,7 @@ show mpls ldp neigh
 ~~~
 !@C1,C2
 conf t
+ mpls ldp router-id lo0 force
  int range e0/0-3
   mpls mtu override 1512
   end
@@ -583,6 +584,7 @@ conf t
 ~~~
 !@PE-1,PE-2,PE-3,PE-3,PE-4
 conf t
+ mpls ldp router-id lo0 force
  int range e0/0
   mpls mtu override 1512
   end

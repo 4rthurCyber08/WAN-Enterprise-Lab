@@ -582,7 +582,7 @@ conf t
 <br>
 
 ~~~
-!@PE-1,PE-2,PE-3,PE-3,PE-4
+!@PE-1,PE-2,PE-3,PE-4
 conf t
  mpls ldp router-id lo0 force
  int range e0/0
@@ -773,7 +773,6 @@ conf t
 
 <br>
 
-__VRF DEFINITION__
 ~~~
 !@PE-1
 conf t
@@ -1103,6 +1102,7 @@ conf t
   collect application name
   collect routing source as
   collect routing destination as
+ !
  flow exporter FLOW-EXPORTER
   destination 208.8.8.133
   transport udp 2055
@@ -1110,9 +1110,11 @@ conf t
   option interface-table timeout 60
   option exporter-stats timeout 60
   export-protocol netflow-v9
+ !
  flow monitor FLOW-MONITOR
   record FLOW-RECORD
   exporter FLOW-EXPORTER
+ !
  interface range e0/0-3
   ip flow monitor FLOW-MONITOR input
   ip flow monitor FLOW-MONITOR output
